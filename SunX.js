@@ -48,11 +48,11 @@ SunX.SResItem = cc._Class.extend({
         this._type = type;
     },
 
-    getResPath: function () {
+    GetResPath: function () {
         return this._resPath;
     },
 
-    getType: function () {
+    GetType: function () {
         return this._type;
     }
 });
@@ -87,9 +87,9 @@ SunX.SResManager = cc._Class.extend({
         let item = null;
         for (let i = 0; i < resources.length; ++i) {
             item = resources[i];
-            if (this._resItems[item.getResPath()] != undefined) continue;
-            this._resItems[item.getResPath()] = item;
-            cc.loader.loadRes(item.getResPath(), item.getType(), this._loadOverItem.bind(this));
+            if (this._resItems[item.GetResPath()] != undefined) continue;
+            this._resItems[item.GetResPath()] = item;
+            cc.loader.loadRes(item.GetResPath(), item.GetType(), this._loadOverItem.bind(this));
         }
     },
 
@@ -106,7 +106,7 @@ SunX.SResManager = cc._Class.extend({
             if (item == undefined) continue;
             delete this._resItems[path];
 
-            this.releaseResType(item.getResPath(), item.getType());
+            this.releaseResType(item.GetResPath(), item.GetType());
         }
     },
 
@@ -129,7 +129,7 @@ SunX.SResManager = cc._Class.extend({
     GetPrefab: function (path) {
         var item = this._resItems[path];
         cc.assert(item != undefined, "_resItems no item");
-        var uuid = cc.loader._getResUuid(item.getResPath(), item.getType());
+        var uuid = cc.loader._getResUuid(item.GetResPath(), item.GetType());
         return cc.loader.getRes(uuid);
     },
 
