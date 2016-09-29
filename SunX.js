@@ -1,6 +1,7 @@
 var SunX = {};
 
 SunX.SEventManager = cc._Class.extend({
+    _allHandler: null,
 
     ctor: function () {
         this._allHandler = {};
@@ -70,7 +71,7 @@ SunX.SResManager = cc._Class.extend({
         this._spriteFrameCache = {};
     },
 
-    load: function (resources, func) {
+    Load: function (resources, func) {
         cc.assert(!this._isWorking, "Resource is working!");
         if (this._isWorking) return;
 
@@ -92,7 +93,7 @@ SunX.SResManager = cc._Class.extend({
         }
     },
 
-    releaseRes: function (resources) {
+    ReleaseRes: function (resources) {
         if (!(resources instanceof Array)) {
             resources = resources ? [resources] : [];
         }
@@ -109,7 +110,7 @@ SunX.SResManager = cc._Class.extend({
         }
     },
 
-    releaseResType: function (res, type) {
+    ReleaseResType: function (res, type) {
         if (type == cc.SpriteAtlas) {
             let uuid = cc.loader._getResUuid(res, type);
             let atlas = cc.loader.getRes(uuid);
@@ -125,14 +126,14 @@ SunX.SResManager = cc._Class.extend({
         }
     },
 
-    /*getTexture2D: function (path) {
+    GetPrefab: function (path) {
         var item = this._resItems[path];
         cc.assert(item != undefined, "_resItems no item");
         var uuid = cc.loader._getResUuid(item.getResPath(), item.getType());
         return cc.loader.getRes(uuid);
-    },*/
+    },
 
-    getSpriteFrame: function (name) {
+    GetSpriteFrame: function (name) {
         return this._spriteFrameCache[name];
     },
 
