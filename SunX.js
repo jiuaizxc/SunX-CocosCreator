@@ -89,7 +89,7 @@ SunX.SEventManager = cc._Class.extend({
         this._removeArray = [];
         this._isRemoveDirty = false;
 
-        cc.director.getScheduler().schedule(this._update, this, 0, false);
+        cc.director.getScheduler().schedule(this._update, this, 0, cc.macro.REPEAT_FOREVER, 0, false);
     },
 
     ExecuteEvent: function (Tag, Data) {
@@ -375,9 +375,9 @@ SunX.SResManager = cc._Class.extend({
     },
 
     _releaseSpriteAtlas: function (atlas) {
-        let spriteFrames = atlas._spriteFrames;
-        let spriteFrame = null;
-        for (let key in spriteFrames) {
+        var spriteFrames = atlas._spriteFrames;
+        var spriteFrame = null;
+        for (var key in spriteFrames) {
             spriteFrame = this._spriteFrameCache[key];
             if (spriteFrame != undefined) {
                 cc.loader.releaseAsset(spriteFrame);
@@ -385,7 +385,7 @@ SunX.SResManager = cc._Class.extend({
             delete this._spriteFrameCache[key];
         }
 
-        let texture2D = atlas.getTexture();
+        var texture2D = atlas.getTexture();
         cc.loader.release(texture2D.url);
         cc.loader.releaseAsset(texture2D);
         cc.loader.releaseAsset(atlas);
@@ -394,7 +394,7 @@ SunX.SResManager = cc._Class.extend({
     _releaseSpriteFrame: function (spriteFrame) {
         delete this._spriteFrameCache[spriteFrame.name];
 
-        let texture2D = spriteFrame.getTexture();
+        var texture2D = spriteFrame.getTexture();
         cc.loader.release(texture2D.url);
         cc.loader.releaseAsset(texture2D);
         cc.loader.releaseAsset(spriteFrame);
@@ -404,6 +404,72 @@ SunX.SResManager = cc._Class.extend({
 SunX.sResManager = null;
 SunX.SResManager.InitSingleton = function () {
     SunX.sResManager = new SunX.SResManager();
+};
+
+SunX.SUserData = cc._Class.extend({
+    _saveFunc: null,
+    _readFunc: null,
+    
+    ctor: function () {
+        /*if (cc.sys.isNative)
+        {
+            this._saveFunc = this._nativeSave;
+            this._readFunc = this._nativeRead;
+        }
+        else
+        {
+            this._saveFunc = this._webSave;
+            this._readFunc = this._webRead;
+        }*/
+
+        this._saveFunc = this._webSave;
+        this._readFunc = this._webRead;
+    },
+
+    FindFile: function (fileName) {
+        /*if (cc.sys.isNative)
+        {
+            fileName = jsb.fileUtils.getWritablePath() + fileName + ".sm";
+            return jsb.fileUtils.isFileExist(fileName);
+        }
+        else
+        {
+            if (cc.sys.localStorage.getItem(fileName)) return true;
+            else return false;
+        }*/
+
+        if (cc.sys.localStorage.getItem(fileName)) return true;
+        else return false;
+    },
+
+    SaveUserData: function (fileName, data) {
+        this._saveFunc(fileName, data);
+    },
+    
+    ReadUserData: function (fileName) {
+        return this._readFunc(fileName);
+    },
+    
+    _webSave: function (fileName, data) {
+        cc.sys.localStorage.setItem(fileName, data);
+    },
+
+    _webRead: function (fileName) {
+        return cc.sys.localStorage.getItem(fileName);
+    },
+
+    _nativeSave: function (fileName, data) {
+
+    },
+
+    _nativeRead: function (fileName, data) {
+
+    }
+});
+
+SunX.sUserData = null;
+SunX.SUserData.InitSingleton = function () {
+    SunX.sUserData = new SunX.SUserData();
 };
 
 module.exports = SunX;
