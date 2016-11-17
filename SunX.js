@@ -1,64 +1,10 @@
 var SunX = {};
 
-SunX.SLinkListItem = function (Data) {
-    this.pre = null;
-    this.next = null;
-    this.data = Data;
+SunX.SEvent = {
+    RES_LOAD_OVER: 9000000000
 };
 
-SunX.LinkList = cc._Class.extend({
-
-    ctor: function () {
-        this._size = 0;
-        this._head = null;
-        this._end = null;
-    },
-
-    Size: function () {
-        return this._size;
-    },
-
-    PushBack: function (data) {
-        if (0 == this._size) {
-            this._head = data;
-            this._end = data;
-        } else {
-            this._end.next = data;
-            data.pre = this._end;
-            this._end = data;
-        }
-        ++ this._size;
-    },
-
-    PushFront: function (data) {
-        if (0 == this._size) {
-            this._head = data;
-            this._end = data;
-        } else {
-            this._head.pre = data;
-            data.next = this._head;
-            this._head = data;
-        }
-        ++ this._size;
-    },
-
-    Remove: function (data) {
-        if (0 == this._size) return;
-        data.pre.next = data.next;
-        -- this._size;
-    },
-
-    Clear: function () {
-
-    },
-
-    GetList: function () {
-        return this._head;
-    }
-});
-
-SunX.SEventEntry = cc._Class.extend({
-
+SunX._SEventEntry = cc._Class.extend({
     ctor: function () {
         this.tag = 0;
         this.target = null;
@@ -77,7 +23,8 @@ SunX.SEventEntry = cc._Class.extend({
     }
 });
 
-SunX.SEventManager = cc._Class.extend({
+SunX.sEventManager = null;
+SunX._SEventManager = cc._Class.extend({
     _hashForEntry: null,
     _hashListener: null,
     _removeArray: null,
@@ -208,7 +155,7 @@ SunX.SEventManager = cc._Class.extend({
             this._hashListener[tag] = entryArr;
         }
 
-        let entry = new SunX.SEventEntry();
+        let entry = new SunX._SEventEntry();
         entry.InitData(tag, handler, target);
         entryArr.push(entry);
         return entry;
@@ -250,22 +197,35 @@ SunX.SEventManager = cc._Class.extend({
     },
 });
 
-SunX.sEventManager = null;
-SunX.SEventManager.InitSingleton = function () {
-    SunX.sEventManager = new SunX.SEventManager();
-};
-
-SunX.SResItem = cc._Class.extend({
-    _resPath: null,
+SunX._SResItem = cc._Class.extend({
+    _uuid: null,
+    _loadUrl: null,
+    _fullPath: null,
     _type: null,
+    _spriteFrameName: null,
+    _sceneData: null,
 
-    ctor: function (resPath, type) {
-        this._resPath = resPath;
+    ctor: function (uuid, loadUrl, fullPath, type) {
+        this._uuid = uuid;
+        this._loadUrl = loadUrl;
+        this._fullPath = fullPath;
         this._type = type;
+
+
+        this._spriteFrameName = "";
+        this._sceneData = [];
     },
 
-    GetResPath: function () {
-        return this._resPath;
+    GetUUID: function () {
+        return this._uuid;
+    },
+
+    GetLoadUrl: function () {
+        return this._loadUrl;
+    },
+
+    GetFullPath: function () {
+        return this._fullPath;
     },
 
     GetType: function () {
@@ -273,40 +233,80 @@ SunX.SResItem = cc._Class.extend({
     }
 });
 
-SunX.SResManager = cc._Class.extend({
-    _resItems: null,
+SunX.sRes = null;
+SunX._SResManager = cc._Class.extend({
+    _pathItemHash: null,
+    _uuidItemHash: null,
     _spriteFrameCache: null,
 
-    _loadOverFunc: null,
-    _total: 0,
-    _count: 0,
-    _isWorking: false,
+    _totalNum: -1,
+    _count: -1,
 
     ctor: function () {
-        this._resItems = {};
+        this._pathItemHash = {};
+        this._uuidItemHash = {};
         this._spriteFrameCache = {};
+
+        this._totalNum = -1;
+        this._count = -1;
     },
 
-    Load: function (resources, func) {
-        cc.assert(!this._isWorking, "Resource is working!");
-        if (this._isWorking) return;
+    _initRes: function () {
+        var settings = window._CCSettings;
+        if (!settings) settings = _CCSettings;
 
-        if (!(resources instanceof Array)) {
-            resources = resources ? [resources] : [];
+        var rawAssets = settings.rawAssets;
+        if (!rawAssets) return;
+
+        rawAssets = rawAssets.assets;
+        var RES_DIR = 'resources/';
+
+        var info;
+        var url;
+        var typeId;
+        var type;
+        var fullPath;
+        var loadUrl;
+        var item;
+
+        for (var uuid in rawAssets) {
+            info = rawAssets[uuid];
+            fullPath = info[0];
+            typeId = info[1];
+            type = cc.js._getClassById(typeId);
+
+            if (!type) {
+                cc.error('Cannot get', typeId);
+                continue;
+            }
+
+            if (fullPath.startsWith(RES_DIR)) {
+                url = fullPath.slice(RES_DIR.length);
+                if (cc.isChildClassOf(type, cc.Asset)) {
+                    loadUrl = uuid;
+                } else {
+                    loadUrl = cc.url.raw(fullPath);
+                }
+
+                item = new SunX._SResItem(uuid, loadUrl, fullPath, type);
+
+                this._pathItemHash[url] = item;
+                this._uuidItemHash[uuid] = item;
+            }
         }
 
-        this._isWorking = true;
-        this._loadOverFunc = func;
-        this._total += resources.length;
-        this._count = 0;
+        window._CCSettings = undefined;
+        _CCSettings = undefined;
+    },
 
-        let item = null;
-        for (let i = 0; i < resources.length; ++i) {
-            item = resources[i];
-            if (this._resItems[item.GetResPath()] != undefined) continue;
-            this._resItems[item.GetResPath()] = item;
-            cc.loader.loadRes(item.GetResPath(), item.GetType(), this._loadOverItem.bind(this));
-        }
+    GetSpriteFrame: function (name) {
+        return this._spriteFrameCache[name];
+    },
+
+    GetRes: function (path) {
+        var item = this._pathItemHash[path];
+        if (!item) return null;
+        return cc.loader.getRes(item.GetUUID());
     },
 
     ReleaseRes: function (resources) {
@@ -314,99 +314,164 @@ SunX.SResManager = cc._Class.extend({
             resources = resources ? [resources] : [];
         }
 
-        let item = null;
-        let path = null;
-        for (let i = 0; i < resources.length; ++ i) {
+        var path;
+        var item;
+        for (var i = 0; i < resources.length; ++i) {
             path = resources[i];
-            item = this._resItems[path];
-            if (item == undefined) continue;
-            delete this._resItems[path];
-
-            this.releaseResType(item.GetResPath(), item.GetType());
+            item = this._pathItemHash[path];
+            this._releaseOne(item);
         }
     },
+    
+    Load: function (resources) {
+        if (!(resources instanceof Array)) {
+            resources = resources ? [resources] : [];
+        }
 
-    ReleaseResType: function (res, type) {
-        if (type == cc.SpriteAtlas) {
-            let uuid = cc.loader._getResUuid(res, type);
-            let atlas = cc.loader.getRes(uuid);
-
-            if (atlas) this._releaseSpriteAtlas(atlas);
-        } else if (type == cc.SpriteFrame) {
-            let uuid = cc.loader._getResUuid(res, type);
-            let spriteFrame = cc.loader.getRes(uuid);
-
-            if (spriteFrame) {
-                this._releaseSpriteFrame(spriteFrame);
+        var path;
+        var item;
+        for (var i = 0; i < resources.length; ++i) {
+            path = resources[i];
+            item = this._pathItemHash[path];
+            if (!item) {
+                resources[i] = undefined;
+            } else {
+                if (cc.isChildClassOf(item._type, cc.Asset)) {
+                    resources[i] = {id: item._loadUrl, type: 'uuid', uuid: item._loadUrl};
+                } else {
+                    resources[i] = item._loadUrl;
+                }
             }
         }
+
+        if (-1 == this._count) this._count = 0;
+
+        if (-1 == this._totalNum) this._totalNum = resources.length;
+        else this._totalNum += resources.length;
+
+
+        var self = this;
+        cc.loader.load(resources, function (error, loadItem) {
+            let map = loadItem.map;
+            let item;
+            for (var uuid in map) {
+                item = loadItem.getContent(uuid);
+                if (item) {
+                    // should not release these assets, even if they are static referenced in the scene.
+                    cc.loader.setAutoReleaseRecursively(uuid, false);
+                    self._loadOver(error, item);
+                }
+            }
+        });
     },
 
-    GetPrefab: function (path) {
-        var item = this._resItems[path];
-        cc.assert(item != undefined, "_resItems no item");
-        var uuid = cc.loader._getResUuid(item.GetResPath(), item.GetType());
-        return cc.loader.getRes(uuid);
-    },
+    _loadOver: function (error, asset) {
+        var item = null;
+        if (asset.hasOwnProperty("_uuid")) {
+            item = this._uuidItemHash[asset._uuid];
+        }
 
-    GetSpriteFrame: function (name) {
-        return this._spriteFrameCache[name];
-    },
-
-    _loadOverItem: function (error, asset) {
-        if (asset instanceof cc.SpriteAtlas) {
-            this._loadSpriteAtlas(asset);
-        } else if (asset instanceof cc.SpriteFrame) {
-            this._spriteFrameCache[asset.name] = asset;
+        if (item) {
+            if (item.GetType() == cc.SpriteFrame) {
+                this._spriteFrameCache[asset.name] = asset;
+                item._spriteFrameName = asset.name;
+            } else if (item.GetType() == cc.SpriteAtlas) {
+                this._loadSpriteAtlas(asset);
+            } else if (item.GetType() == cc.SceneAsset) {
+                var arr = cc.loader.getDependsRecursively(asset);
+                Array.prototype.push.apply(item._sceneData, arr);
+            }
         }
 
         this._count += 1;
-        if (this._count >= this._total) {
-            this._loadOverFunc();
-            this._isWorking = false;
+        if (this._totalNum == this._count) {
+            this._count = -1;
+            this._totalNum = -1;
+
+            SunX.sEventManager.ExecuteEvent(SunX.SEvent.RES_LOAD_OVER, null);
         }
     },
 
     _loadSpriteAtlas: function (atlas) {
-        let spriteFrames = atlas._spriteFrames;
+        var spriteFrames = atlas._spriteFrames;
         for (let key in spriteFrames) {
             this._spriteFrameCache[key] = spriteFrames[key];
         }
     },
 
-    _releaseSpriteAtlas: function (atlas) {
-        var spriteFrames = atlas._spriteFrames;
-        var spriteFrame = null;
-        for (var key in spriteFrames) {
-            spriteFrame = this._spriteFrameCache[key];
-            if (spriteFrame != undefined) {
-                cc.loader.releaseAsset(spriteFrame);
-            }
-            delete this._spriteFrameCache[key];
-        }
+    _releaseOne: function (item) {
+        if (!item) return;
 
-        var texture2D = atlas.getTexture();
-        cc.loader.release(texture2D.url);
-        cc.loader.releaseAsset(texture2D);
-        cc.loader.releaseAsset(atlas);
+        if (item.GetType() == cc.SpriteFrame) {
+            delete this._spriteFrameCache[item._spriteFrameName];
+            let temp = cc.loader.getDependsRecursively(item.GetLoadUrl());
+            cc.loader.release(temp);
+        } else if (item.GetType() == cc.SpriteAtlas) {
+            let atlas = cc.loader.getRes(item.GetLoadUrl());
+            if (atlas) this._releaseSpriteAtlas(atlas);
+        } else if (item.GetType() == cc.BitmapFont) {
+            let asset = cc.loader.getRes(item.GetLoadUrl());
+            if (asset) this._releaseBitmapFont(asset);
+        } else if (item.GetType() == cc.Prefab) {
+            let asset = cc.loader.getRes(item.GetLoadUrl());
+            if (asset) this._releasePrefab(asset);
+        } else if (item.GetType() == cc.SceneAsset) {
+            this._releaseScene(item);
+        } else {
+            cc.loader.release(item.GetLoadUrl());
+            if (item._uuid != item._loadUrl) {
+                cc.loader.release(item._uuid);
+            }
+        }
     },
 
-    _releaseSpriteFrame: function (spriteFrame) {
-        delete this._spriteFrameCache[spriteFrame.name];
+    _releaseSpriteAtlas: function (atlas) {
+        var spriteFrames = atlas._spriteFrames;
+        for (var key in spriteFrames) {
+            delete this._spriteFrameCache[key];
+        }
+        var temp = cc.loader.getDependsRecursively(atlas);
+        cc.loader.release(temp);
+    },
 
-        var texture2D = spriteFrame.getTexture();
-        cc.loader.release(texture2D.url);
-        cc.loader.releaseAsset(texture2D);
-        cc.loader.releaseAsset(spriteFrame);
+    _releaseBitmapFont: function (asset) {
+        var arr = asset.rawUrls;
+        var len = arr.length;
+        for (var i = 0; i < len; ++ i) {
+            cc.loader.release(arr[i]);
+        }
+
+        var temp = cc.loader.getDependsRecursively(asset);
+        cc.loader.release(temp);
+    },
+
+    _releasePrefab: function (asset) {
+        var uuid;
+        var arr = cc.loader.getDependsRecursively(asset);
+        var len = arr.length;
+        for (var i = 0; i < len; ++ i) {
+            uuid = arr[i];
+            if (uuid == asset._uuid) continue;
+            this._releaseOne(this._uuidItemHash[uuid]);
+        }
+        cc.loader.release(asset);
+    },
+
+    _releaseScene: function (item) {
+        var arr = item._sceneData;
+        var len = arr.length;
+        for (var i = 0; i < len; ++ i) {
+            uuid = arr[i];
+            if (uuid == item._uuid) continue;
+            this._releaseOne(this._uuidItemHash[uuid]);
+        }
+        cc.loader.release(item._uuid);
+        item._sceneData.length = 0;
     }
 });
 
-SunX.sResManager = null;
-SunX.SResManager.InitSingleton = function () {
-    SunX.sResManager = new SunX.SResManager();
-};
-
-SunX.SUserData = cc._Class.extend({
+SunX.sUserData = null;
+SunX._SUserData = cc._Class.extend({
     _saveFunc: null,
     _readFunc: null,
     
@@ -467,9 +532,20 @@ SunX.SUserData = cc._Class.extend({
     }
 });
 
-SunX.sUserData = null;
-SunX.SUserData.InitSingleton = function () {
-    SunX.sUserData = new SunX.SUserData();
+SunX.SInit = function () {
+    SunX.sEventManager = new SunX._SEventManager();
+    SunX.sRes = new SunX._SResManager();
+    SunX.sUserData = new SunX._SUserData();
+
+    SunX.sRes._initRes();
 };
 
-module.exports = SunX;
+SunX.SChangeScene = function (sceneName) {
+    cc.director.loadScene(sceneName, function (error, scene) {
+        var item = SunX.sRes._uuidItemHash[scene.uuid];
+        if (item._sceneData.length > 0) return;
+        Array.prototype.push.apply(item._sceneData, scene.dependAssets);
+    });
+};
+
+//module.exports = SunX;
