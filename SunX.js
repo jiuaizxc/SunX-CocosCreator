@@ -1,10 +1,29 @@
 var SunX = {};
+window.SunX = SunX;
 
 SunX.SEvent = {
-    RES_LOAD_OVER: 9000000000
+    RES_LOAD_OVER: "RES_LOAD_OVER"
 };
 
-var _SEventEntry = cc._Class.extend({
+SunX._isGC = false;
+SunX._destroySceneName = null;
+
+/**
+* 调用垃圾回收
+**/
+SunX.GC = function () {
+    SunX._isGC = true;
+};
+
+/**
+* 摧毁场景
+**/
+SunX.DestroyScene = function (sceneName) {
+    SunX._destroySceneName = sceneName;
+    SunX._isGC = true;
+};
+
+SunX._SEventEntry = cc.Class({
     ctor: function () {
         this.tag = 0;
         this.target = null;
@@ -24,13 +43,15 @@ var _SEventEntry = cc._Class.extend({
 });
 
 SunX.sEventManager = null;
-var _SEventManager = cc._Class.extend({
-    _hashForEntry: null,
-    _hashListener: null,
-    _removeArray: null,
-    _isRemoveDirty: false,
+SunX.ClassEventID = 1;
+SunX.__getClassEventID = function () {
+    return SunX.ClassEventID ++;
+};
+
+SunX._SEventManager = cc.Class({
 
     ctor: function () {
+        this.__instanceId = cc.ClassManager.getNewInstanceId();
         this._hashForEntry = {};
         this._hashListener = {};
         this._removeArray = [];
@@ -61,26 +82,23 @@ var _SEventManager = cc._Class.extend({
     /**
      * 注册事件。
      *
-     * target对象一定要是继承自cc.Class/cc._Class类才能够注册
      * 同一个target对象上不能注册事件名称相同的事件
      *
      * @method AddEvent
-     * @param {Number} tag - 事件名称(注意tag>=9000000000的名称被SunX引擎暂用)
+     * @param {Number} tag - 事件名称
      * @param {Function} handler - 事件回调函数
      * @param {Object} target - 事件调用的对象
      **/
     AddEvent: function (tag, handler, target) {
-        cc.assert(cc.js.isNumber(tag), "tag no Number");
-
-        let instanceId = this._getTargetId(target);
-        let element = this._hashForEntry[instanceId];
+        var instanceId = this._getTargetId(target);
+        var element = this._hashForEntry[instanceId];
 
         if(!element) {
             element = [];
             this._hashForEntry[instanceId] = element;
         }
 
-        let entry = this._findTagToEntry(element, tag);
+        var entry = this._findTagToEntry(element, tag);
 
         if (entry) {
             if (entry.isDirty) {
@@ -97,21 +115,20 @@ var _SEventManager = cc._Class.extend({
     /**
      * 移除单个事件。
      *
-     * target对象一定要是继承自cc.Class/cc._Class类才能够注册
      *
      * @method RemoveEvent
      * @param {Number} tag - 事件名称
      * @param {Object} target - 事件调用的对象
      **/
     RemoveEvent: function (tag, target) {
-        let instanceId = this._getTargetId(target);
-        let element = this._hashForEntry[instanceId];
+        var instanceId = this._getTargetId(target);
+        var element = this._hashForEntry[instanceId];
 
         if (!element) return;
 
 
-        let entry = this._findTagToEntry(entryArr, tag);
-        if (!entry || !entry.isDirty) return;
+        var entry = this._findTagToEntry(element, tag);
+        if (!entry || entry.isDirty) return;
 
 
         entry.isDirty = true;
@@ -122,22 +139,21 @@ var _SEventManager = cc._Class.extend({
     /**
      * 移除所有事件。
      *
-     * target对象一定要是继承自cc.Class/cc._Class类才能够注册
      *
      * @method RemoveAllEvent
      * @param {Object} target - 事件调用的对象
      **/
     RemoveAllEvent: function (target) {
-        let instanceId = this._getTargetId(target);
-        let element = this._hashForEntry[instanceId];
+        var instanceId = this._getTargetId(target);
+        var element = this._hashForEntry[instanceId];
 
         if (!element) return;
 
-        let len = element.length;
+        var len = element.length;
         if (0 == len) return;
 
-        let entry = null;
-        for (let i = 0; i < len; ++ i) {
+        var entry = null;
+        for (var i = 0; i < len; ++ i) {
             entry = element[i];
             if (entry.isDirty) continue;
             entry.isDirty = true;
@@ -149,13 +165,13 @@ var _SEventManager = cc._Class.extend({
 
     _update: function (dlt) {
         if (this._isRemoveDirty) {
-            let instanceId = 0;
-            let element = null;
-            let entry = null;
-            let arr = null;
-            let size = 0;
+            var instanceId = 0;
+            var element = null;
+            var entry = null;
+            var arr = null;
+            var size = 0;
 
-            let len = this._removeArray.length;
+            var len = this._removeArray.length;
 
             while (--len >= 0) {
                 entry = this._removeArray[len];
@@ -168,13 +184,8 @@ var _SEventManager = cc._Class.extend({
 
                     size = element.length;
                     this._arrRemoveItem(element, entry, size);
+                    this._arrRemoveItem(arr, entry, arr.length);
                     if (1 == size) delete this._hashForEntry[instanceId];
-
-
-                    size = element.length;
-                    this._arrRemoveItem(arr, entry, size);
-                    if (1 == size) delete this._hashListener[entry.tag];
-
                 }
             }
 
@@ -184,30 +195,30 @@ var _SEventManager = cc._Class.extend({
     },
 
     _addListenerMap: function (tag, handler, target) {
-        let entryArr = this._hashListener[tag];
+        var entryArr = this._hashListener[tag];
 
         if (!entryArr) {
             entryArr = [];
             this._hashListener[tag] = entryArr;
         }
 
-        let entry = new _SEventEntry();
+        var entry = new SunX._SEventEntry();
         entry.InitData(tag, handler, target);
         entryArr.push(entry);
         return entry;
     },
 
     _findTargetToEntry: function (arr, target) {
-        let len = arr.length;
-        for (let i = 0; i < len; ++ i) {
+        var len = arr.length;
+        for (var i = 0; i < len; ++ i) {
             if (target == arr[i].target) return arr[i];
         }
         return null;
     },
 
     _findTagToEntry: function (arr, tag) {
-        let len = arr.length;
-        for (let i = 0; i < len; ++ i) {
+        var len = arr.length;
+        for (var i = 0; i < len; ++ i) {
             if (tag == arr[i].tag) return arr[i];
         }
         return null;
@@ -217,7 +228,7 @@ var _SEventManager = cc._Class.extend({
         if (1 == len) {
             arr.pop();
         } else {
-            let index = arr.indexOf(item);
+            var index = arr.indexOf(item);
             if (index == -1) return;
 
             if (len - 1 == index) {
@@ -229,20 +240,28 @@ var _SEventManager = cc._Class.extend({
     },
 
     _getTargetId: function (target) {
-        return target.__instanceId || target.uuid;
+        if (target.__sunxeventID) return target.__sunxeventID;
+        target.__sunxeventID = SunX.__getClassEventID();
+        return target.__sunxeventID;
     },
 });
 
-var _SResItem = cc._Class.extend({
-    _uuid: null,
-    _loadUrl: null,
-    _fullPath: null,
-    _type: null,
-    _spriteFrameName: null,
-    _sceneData: null,
-    _callFunc: null,
+SunX._SResItem = cc.Class({
 
-    ctor: function (uuid, loadUrl, fullPath, type) {
+    ctor: function () {
+        this._uuid = null;
+        this._loadUrl = null;
+        this._fullPath = null;
+        this._type = null;
+
+        this._spriteFrameName = "";
+        this._sceneData = [];
+        this._callFunc = null;
+
+        this.LoadingType = 0;
+    },
+
+    Init: function (uuid, loadUrl, fullPath, type) {
         this._uuid = uuid;
         this._loadUrl = loadUrl;
         this._fullPath = fullPath;
@@ -251,6 +270,8 @@ var _SResItem = cc._Class.extend({
         this._spriteFrameName = "";
         this._sceneData = [];
         this._callFunc = null;
+
+        this.LoadingType = 0;
     },
 
     GetUUID: function () {
@@ -274,22 +295,13 @@ var _SResItem = cc._Class.extend({
     }
 });
 
-SunX.sRes = null;
-var _SResManager = cc._Class.extend({
-    _pathItemHash: null,
-    _uuidItemHash: null,
-    _spriteFrameCache: null,
-
-    _totalNum: -1,
-    _count: -1,
-
-    _cacheRes: null,
-    _cacheSceneRes: null,
-    _curScene: null,
+SunX._SResManager = cc.Class({
 
     ctor: function () {
         this._pathItemHash = {};
         this._uuidItemHash = {};
+        this._sceneHash = {};
+
         this._spriteFrameCache = {};
 
         this._totalNum = -1;
@@ -306,8 +318,31 @@ var _SResManager = cc._Class.extend({
         if (!settings) settings = _CCSettings;
 
         var rawAssets = settings.rawAssets;
-        if (!rawAssets) return;
+        if (rawAssets) this._parseResData(rawAssets);
 
+        var scenes = settings.scenes;
+        if (scenes) this._parseSceneData(scenes);
+
+        if(window) window._CCSettings = undefined;
+        _CCSettings = undefined;
+    },
+
+    _parseSceneData: function (scenes) {
+        var len = scenes.length;
+        var obj = null;
+        var scenesName = null;
+        var index1 = -1;
+        var index2 = -1;
+        for (var i = 0; i < len; ++ i) {
+            obj = scenes[i];
+            scenesName = obj.url;
+            index1 = scenesName.lastIndexOf("/");
+            index2 = scenesName.lastIndexOf(".fire");
+            this._sceneHash[obj.uuid] = scenesName.slice(index1 + 1, index2);
+        }
+    },
+
+    _parseResData: function (rawAssets) {
         rawAssets = rawAssets.assets;
         var RES_DIR = 'resources/';
 
@@ -338,15 +373,13 @@ var _SResManager = cc._Class.extend({
                     loadUrl = cc.url.raw(fullPath);
                 }
 
-                item = new _SResItem(uuid, loadUrl, fullPath, type);
+                item = new SunX._SResItem();
+                item.Init(uuid, loadUrl, fullPath, type);
 
                 this._pathItemHash[url] = item;
                 this._uuidItemHash[uuid] = item;
             }
         }
-
-        if(window) window._CCSettings = undefined;
-        _CCSettings = undefined;
     },
 
     /**
@@ -371,6 +404,15 @@ var _SResManager = cc._Class.extend({
     },
 
     /**
+     * 获取resources下某个目录中的所有文件uuid数组。
+     * @method GetRes
+     * @param {String} path - 文件路径
+     **/
+    GetResDir: function (path) {
+        return cc.loader._resources.getUuidArray(path, null);
+    },
+
+    /**
      * 释放资源。
      * @method ReleaseRes
      * @param {String|Array} resources - 文件路径/者文件路径的数组
@@ -385,10 +427,16 @@ var _SResManager = cc._Class.extend({
         for (var i = 0; i < resources.length; ++i) {
             path = resources[i];
             item = this._pathItemHash[path];
+
+            if (!item) continue;
+
+            if (item.LoadingType == 1) {
+                item.LoadingType = 0;
+                continue;
+            }
+
             this._releaseOne(item);
         }
-
-        this.PurgeCachedRes();
     },
 
     /**
@@ -407,6 +455,7 @@ var _SResManager = cc._Class.extend({
         } else {
             var list = this._cacheSceneRes[sceneName];
             delete this._cacheSceneRes[sceneName];
+            if (!list) return;
             this._subCacheResArray(list);
         }
 
@@ -433,7 +482,7 @@ var _SResManager = cc._Class.extend({
      * 加载资源。
      *
      * @method Load
-     * @param {String|Object|Array} resources - 文件路径/者文件路径的数组
+     * @param {String|Object|Array} resources - 文件路径/文件对象/文件路径的数组
      **/
     Load: function (resources) {
         if (!(resources instanceof Array)) {
@@ -451,14 +500,17 @@ var _SResManager = cc._Class.extend({
 
             if (typeof path === 'string') {
                 item = this._pathItemHash[path];
+                if (!item) item = this._uuidItemHash[path];
             } else {
                 item = this._pathItemHash[path.url];
+                if (!item) item = this._uuidItemHash[path.url];
                 item._callFunc = path.func;
             }
 
             if (!item) {
                 resources[i] = undefined;
             } else {
+                item.LoadingType = 1;
                 if (cc.isChildClassOf(item._type, cc.Asset)) {
                     resources[i] = {type: 'uuid', uuid: item._loadUrl};
                 } else {
@@ -475,16 +527,16 @@ var _SResManager = cc._Class.extend({
 
         var self = this;
         cc.loader.load(resources, function (error, loadItem) {
-            let map = loadItem.map;
-            let data;
-            let item;
-            for (var key in map) {
-                item = map[key];
-                data = loadItem.getContent(key);
-                if (data) {
+            var map1 = loadItem.map;
+            var data1;
+            var item1;
+            for (var key in map1) {
+                item1 = map1[key];
+                data1 = loadItem.getContent(key);
+                if (data1) {
                     // should not release these assets, even if they are static referenced in the scene.
                     cc.loader.setAutoReleaseRecursively(key, false);
-                    self._loadOver(error, key, item.url, data, item.dependKeys);
+                    self._loadOver(error, key, item1.url, data1, item1.dependKeys);
                 }
             }
         });
@@ -503,6 +555,18 @@ var _SResManager = cc._Class.extend({
         }
 
         if (item) {
+
+            if (item.LoadingType == 0) {
+                depends = cc.loader.getDependsRecursively(asset);
+                cc.loader.release(depends);
+
+                item._callFunc = null;
+                this._loadCount();
+                return;
+            }
+
+            item.LoadingType = 2;
+
             var depends;
             if (item.GetType() == cc.SpriteFrame) {
                 this._spriteFrameCache[asset.name] = asset;
@@ -530,7 +594,10 @@ var _SResManager = cc._Class.extend({
                 this._addCacheResArray(depends);
             }
 
-            if (item._callFunc) item._callFunc(asset);
+            if (item._callFunc) {
+                item._callFunc(asset);
+                item._callFunc = null;
+            }
         }
 
         this._loadCount();
@@ -548,7 +615,7 @@ var _SResManager = cc._Class.extend({
 
     _loadSpriteAtlas: function (atlas) {
         var spriteFrames = atlas._spriteFrames;
-        for (let key in spriteFrames) {
+        for (var key in spriteFrames) {
             this._spriteFrameCache[key] = spriteFrames[key];
         }
     },
@@ -582,6 +649,8 @@ var _SResManager = cc._Class.extend({
                 if (asset) this._releaseDepends(asset);
             }
         }
+
+        item.LoadingType = 0;
     },
 
     _releaseSpriteAtlas: function (atlas) {
@@ -606,7 +675,12 @@ var _SResManager = cc._Class.extend({
     _onSceneLaunch: function (scene) {
         var curSave = true;
 
-        var sceneInfo = cc.director._getSceneUuid(scene.name);
+        var sceneName = this._sceneHash[scene._id];
+        if (!sceneName) sceneName = scene._name;
+        if (!sceneName || sceneName == "") return;
+
+        var sceneInfo = cc.director._getSceneUuid(sceneName);
+        if (!sceneInfo) return;
 
         if (this._cacheRes[sceneInfo.uuid]) curSave = false;
         this._curScene = scene;
@@ -664,53 +738,25 @@ var _SResManager = cc._Class.extend({
     }
 });
 
-SunX.sUserData = null;
-var _SUserData = cc._Class.extend({
-    _saveFunc: null,
-    _readFunc: null,
-    
-    ctor: function () {
-        this._saveFunc = this._webSave;
-        this._readFunc = this._webRead;
-    },
-
-    FindFile: function (fileName) {
-        if (cc.sys.localStorage.getItem(fileName)) return true;
-        else return false;
-    },
-
-    SaveUserData: function (fileName, data) {
-        this._saveFunc(fileName, data);
-    },
-    
-    ReadUserData: function (fileName) {
-        return this._readFunc(fileName);
-    },
-    
-    _webSave: function (fileName, data) {
-        cc.sys.localStorage.setItem(fileName, data);
-    },
-
-    _webRead: function (fileName) {
-        return cc.sys.localStorage.getItem(fileName);
-    },
-
-    _nativeSave: function (fileName, data) {
-
-    },
-
-    _nativeRead: function (fileName, data) {
-
-    }
-});
+SunX.sEventManager = new SunX._SEventManager();
+SunX.sRes = new SunX._SResManager();
 
 cc.game.on(cc.game.EVENT_GAME_INITED, function () {
-    SunX.sEventManager = new _SEventManager();
-    SunX.sRes = new _SResManager();
-    SunX.sUserData = new _SUserData();
 
     cc.director.on(cc.Director.EVENT_AFTER_SCENE_LAUNCH, function(event) {
         SunX.sRes._onSceneLaunch(event.detail);
+    });
+
+    cc.director.on(cc.Director.EVENT_AFTER_DRAW, function(event) {
+        if (SunX._destroySceneName) {
+            SunX.sRes.ReleaseSceneRes(SunX._destroySceneName);
+            SunX._destroySceneName = null;
+        }
+
+        if (SunX._isGC) {
+            SunX._isGC = false;
+            cc.sys.garbageCollect();
+        }
     });
 
     SunX.sRes._initRes();
